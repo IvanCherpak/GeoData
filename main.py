@@ -8,7 +8,7 @@ from shapely.geometry import Polygon, box
 import psycopg2
 import configparser
 
-def task1(name: str):
+def import_points(name: str):
     ukrGEO = gpd.read_file(name)
     all_coordinates = ukrGEO['geometry'].geometry.get_coordinates()
 
@@ -16,7 +16,7 @@ def task1(name: str):
     X, Y = ukrGEO['geometry'].geometry.get_coordinates().x.to_numpy(), ukrGEO[
         'geometry'].geometry.get_coordinates().y.to_numpy()
     return (X,Y)
-def task3(figure: Polygon, square_size: float):
+def fill_with_squares(figure: Polygon, square_size: float):
     minx, miny, maxx, maxy = figure.bounds
 
     sq_size_y = square_size/110.574 #convert to latitude
@@ -33,7 +33,7 @@ def task3(figure: Polygon, square_size: float):
             if not intersection.is_empty:
                 squares.append(square)
     return squares
-def task6(points, radius_km: float = 5.0, azimuths: list = [0,120,240], angle_width: int = 60, ):
+def build_azimuths(points, radius_km: float = 5.0, azimuths: list = [0,120,240], angle_width: int = 60, ):
     sectors = [None for _ in range(int(len(azimuths)*len(points)))]
     n = len(azimuths)
 
@@ -53,7 +53,7 @@ def task6(points, radius_km: float = 5.0, azimuths: list = [0,120,240], angle_wi
             if (atan2 >= sector[1]-0.5*sector[-1] and atan2 <= sector[1] + 0.5*sector[-1] and distance_test and center_test):
                 points_n_sectors[i].append((px, py))
     return (sectors, points_n_sectors)
-def task7(fig, ax, squares, radius_km = 5, square_size_km=1, angle_width = 60, azimuths = [0, 120, 240], colors = ['blue', 'green', 'red']):
+def plot_azimuths(fig, ax, squares, radius_km = 5, square_size_km=1, angle_width = 60, azimuths = [0, 120, 240], colors = ['blue', 'green', 'red']):
     for square in squares:
         minx, miny, maxx, maxy = square.bounds
         points = [(minx, miny), (maxx, miny), (maxx, maxy), (minx, maxy)]
@@ -66,28 +66,28 @@ def task7(fig, ax, squares, radius_km = 5, square_size_km=1, angle_width = 60, a
                 ax.add_patch(wedge)
 def _plotter(X, Y, squares, radius):
     fig, ax = plt.subplots(figsize=(12, 12))
-    # Task 2
+    # Plot border
     ax.plot(X, Y, 'ro--', zorder=0)
-    plt.savefig("Task2.png")
+    plt.savefig("Border.png")
     plt.show()
-    # Task 5
+    # Plot squares
     fig, ax = plt.subplots(figsize=(12, 12))
     ax.plot(X, Y, 'ro--', zorder=0)
     for square in squares:
         x, y = square.exterior.xy
         ax.plot(x, y, zorder=1, color='royalblue')
     ax.set_aspect('equal', adjustable='box')
-    plt.savefig("Task5.png")
+    plt.savefig("Squares.png")
     plt.show()
-    #Task 7
+    #Plot sectors
     fig, ax = plt.subplots(figsize=(12, 12))
     ax.plot(X, Y, 'ro--', zorder=0)
     for square in squares:
         x, y = square.exterior.xy
         ax.plot(x, y, zorder=1, color='royalblue')
     ax.set_aspect('equal', adjustable='box')
-    task7(fig, ax, squares, radius_km=radius)
-    plt.savefig("Task7.png")
+    plot_azimuths(fig, ax, squares, radius_km=radius)
+    plt.savefig("plot_sectors.png")
     plt.show()
 
 def _db_insertion(cursor, X, Y, squares: list, sectors: list, points_n_sectors: dict, columns: list ):
@@ -133,13 +133,13 @@ def main():
     configs.read("settings.ini", encoding="UTF-8")
 
     name = configs["Options"]["geofile"]
-    X,Y = task1(name)
+    X,Y = import_points(name)
     print(f"Imported {len(X)} border points from GeoJSON file")
 
     poly = Polygon([(X[i], Y[i]) for i in range(len(X))])
     sq_size = 20
     radius = 5*sq_size
-    squares = task3(poly, sq_size)
+    squares = fill_with_squares(poly, sq_size)
     print(f"Split map into {len(squares)} squares of size {sq_size}")
 
     all_points = []
@@ -148,7 +148,7 @@ def main():
         points = [(minx, miny), (maxx, miny), (maxx, maxy), (minx, maxy)]
         new_points = [p for p in points if not (p in all_points)]
         all_points.extend(new_points)
-    sectors, points_n_sectors = task6(all_points, radius_km=radius)
+    sectors, points_n_sectors = build_azimuths(all_points, radius_km=radius)
     print(f"Azimuths finished")
 
     print("Graphical representation")
